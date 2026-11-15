@@ -1,0 +1,629 @@
+{
+  "name": "Бесконтактное заселение (пример, эп. 44)",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        300
+      ],
+      "webhookId": "",
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "0ee43800-a506-50e0-8d23-f864be17b48d"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO guests (chat_id) VALUES ($1) ON CONFLICT (chat_id) DO UPDATE SET chat_id = EXCLUDED.chat_id RETURNING chat_id, step;",
+        "options": {
+          "queryReplacement": "={{ $json.message.chat.id }}"
+        }
+      },
+      "name": "Состояние гостя",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        240,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Checkin PostgreSQL"
+        }
+      },
+      "id": "d999f7c7-dca3-538a-bee4-04b6e03d2f87"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.step }}",
+                    "rightValue": 0,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $('Telegram Trigger').item.json.message.photo ? 'yes' : 'no' }}",
+                    "rightValue": "yes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "паспорт"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.step }}",
+                    "rightValue": 1,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ $('Telegram Trigger').item.json.message.photo ? 'yes' : 'no' }}",
+                    "rightValue": "yes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "селфи"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.step }}",
+                    "rightValue": 2,
+                    "operator": {
+                      "type": "number",
+                      "operation": "equals"
+                    }
+                  },
+                  {
+                    "leftValue": "={{ ($('Telegram Trigger').item.json.message.text || '').toLowerCase() }}",
+                    "rightValue": "согласен",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "согласие"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "name": "Какой шаг",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        480,
+        300
+      ],
+      "id": "16cccbe9-4eed-5fc1-8dd7-df0056571910"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.photo.at(-1).file_id }}",
+        "download": true
+      },
+      "name": "Скачать фото паспорта",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "890a3a30-ad97-5f98-9efb-ba1d0548e320"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/scans/{{ $('Telegram Trigger').item.json.message.chat.id }}_passport.jpg",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "name": "Сохранить скан паспорта",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        0
+      ],
+      "id": "afb83316-3794-5f87-8d32-24c22d047324"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE guests SET step = 1, passport_file = $2 WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.chat.id }},/data/scans/{{ $('Telegram Trigger').item.json.message.chat.id }}_passport.jpg"
+        }
+      },
+      "name": "Шаг 1: паспорт получен",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1240,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Checkin PostgreSQL"
+        }
+      },
+      "id": "42b03182-4d56-59e0-a906-cb25b4d6d7f1"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Паспорт получен. Теперь пришлите селфи.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Просим селфи",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1480,
+        0
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "3f65c88a-0fae-597f-b924-17ec138fd85d"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $('Telegram Trigger').item.json.message.photo.at(-1).file_id }}",
+        "download": true
+      },
+      "name": "Скачать селфи",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "42ab2328-746a-5872-af5e-6756a086956e"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/scans/{{ $('Telegram Trigger').item.json.message.chat.id }}_selfie.jpg",
+        "dataPropertyName": "data",
+        "options": {}
+      },
+      "name": "Сохранить селфи",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        1000,
+        200
+      ],
+      "id": "6699e93a-cd44-570c-a590-1748656ff962"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE guests SET step = 2, selfie_file = $2 WHERE chat_id = $1;",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.chat.id }},/data/scans/{{ $('Telegram Trigger').item.json.message.chat.id }}_selfie.jpg"
+        }
+      },
+      "name": "Шаг 2: селфи получено",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1240,
+        200
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Checkin PostgreSQL"
+        }
+      },
+      "id": "bb679aea-06e9-53a1-a86d-2b80c18e13ba"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Селфи получено. Прочитайте оферту (ссылка от хозяина) и напишите слово «согласен».",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Просим согласие",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1480,
+        200
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "897865f6-36da-5fca-baa7-0a5ce6b444da"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH c AS (INSERT INTO consents (chat_id, offer_version) VALUES ($1, 'v1') RETURNING chat_id) SELECT g.chat_id, COALESCE(g.checkout_at, now() + interval '1 day') AS valid_until FROM guests g JOIN c ON c.chat_id = g.chat_id;",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.chat.id }}"
+        }
+      },
+      "name": "Записать согласие",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        760,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Checkin PostgreSQL"
+        }
+      },
+      "id": "95a6855c-151d-5659-ba98-ba7aad319697"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Why Code: случайный пин-код из криптографического генератора, ни один узел n8n такого не делает.\nconst a = new Uint32Array(1);\ncrypto.getRandomValues(a);\nconst pin = String(100000 + (a[0] % 900000));\nreturn [{ json: { ...$input.first().json, pin } }];"
+      },
+      "name": "Сгенерировать пин-код",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1000,
+        400
+      ],
+      "notes": "Why Code: криптографически случайный пин; проверьте доступность crypto в вашей версии n8n.",
+      "id": "e7a126cf-55e2-5674-ada3-5d62b67d32b7"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://API_ВАШЕГО_ЗАМКА.example/v1/codes",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer ЗАМЕНИТЕ_НА_ТОКЕН_ЗАМКА"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ code: $json.pin, valid_until: $json.valid_until }) }}",
+        "options": {}
+      },
+      "name": "Отправить код на замок",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1240,
+        400
+      ],
+      "notes": "Заглушка: адрес, заголовок и тело зависят от API вашей модели замка. Токен лучше хранить в учётных данных n8n.",
+      "id": "6db5821f-37f4-5a17-aff3-6518589d7ee5"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH u AS (UPDATE guests SET step = 3 WHERE chat_id = $1 RETURNING chat_id) INSERT INTO access_log (chat_id, valid_until, lock_status) SELECT chat_id, $2::timestamptz, 'sent' FROM u;",
+        "options": {
+          "queryReplacement": "={{ $('Telegram Trigger').item.json.message.chat.id }},{{ $('Сгенерировать пин-код').item.json.valid_until }}"
+        }
+      },
+      "name": "Шаг 3: выдан пин-код",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        1480,
+        400
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "",
+          "name": "Checkin PostgreSQL"
+        }
+      },
+      "id": "d79916c4-5826-54bd-999b-e12618c6fc2f"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "=Ваш одноразовый код: {{ $('Сгенерировать пин-код').item.json.pin }}\nОн действует до {{ $('Сгенерировать пин-код').item.json.valid_until }}.",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Отправить пин гостю",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1720,
+        400
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "21587d00-d3eb-5f78-8625-943453745626"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "Следуйте шагам: 1) фото паспорта, 2) селфи, 3) слово «согласен».",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Подсказка по шагам",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        760,
+        600
+      ],
+      "credentials": {
+        "telegramApi": {
+          "id": "",
+          "name": "Telegram Bot"
+        }
+      },
+      "id": "6c864b3a-cffa-5eed-a562-bb9d9c02c288"
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Состояние гостя",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Состояние гостя": {
+      "main": [
+        [
+          {
+            "node": "Какой шаг",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Какой шаг": {
+      "main": [
+        [
+          {
+            "node": "Скачать фото паспорта",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Скачать селфи",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Записать согласие",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Подсказка по шагам",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Скачать фото паспорта": {
+      "main": [
+        [
+          {
+            "node": "Сохранить скан паспорта",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сохранить скан паспорта": {
+      "main": [
+        [
+          {
+            "node": "Шаг 1: паспорт получен",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Шаг 1: паспорт получен": {
+      "main": [
+        [
+          {
+            "node": "Просим селфи",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Скачать селфи": {
+      "main": [
+        [
+          {
+            "node": "Сохранить селфи",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сохранить селфи": {
+      "main": [
+        [
+          {
+            "node": "Шаг 2: селфи получено",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Шаг 2: селфи получено": {
+      "main": [
+        [
+          {
+            "node": "Просим согласие",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Записать согласие": {
+      "main": [
+        [
+          {
+            "node": "Сгенерировать пин-код",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Сгенерировать пин-код": {
+      "main": [
+        [
+          {
+            "node": "Отправить код на замок",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Отправить код на замок": {
+      "main": [
+        [
+          {
+            "node": "Шаг 3: выдан пин-код",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Шаг 3: выдан пин-код": {
+      "main": [
+        [
+          {
+            "node": "Отправить пин гостю",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
